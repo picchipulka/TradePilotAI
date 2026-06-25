@@ -1,5 +1,6 @@
 from collections import Counter
 
+from alerts.notifier import send_notification
 from database.supabase import WatchlistEntry, get_watchlist
 from market.market_data import get_current_price
 from scanner.scanner import get_distance_to_range, get_range_status
@@ -64,6 +65,37 @@ def _scan_entry(entry: WatchlistEntry) -> dict:
     }
 
 
+def _print_buy_alert(item: dict) -> None:
+    entry = item["entry"]
+
+    print("\n===================================")
+    print("🚨 BUY ALERT 🚨")
+    print(f"Ticker     : {entry.Ticker}")
+    print(f"Current    : {_format_price(item['current_price'])}")
+    print(
+        f"Buy Zone   : "
+        f"{_format_price(entry.Buy_Range_low)} - "
+        f"{_format_price(entry.Buy_Range_high)}"
+    )
+    print("===================================\n")
+
+
+def _process_alert(item: dict) -> None:
+    if item["status"] != "IN RANGE":
+        return
+
+    entry = item["entry"]
+
+    _print_buy_alert(item)
+
+    send_notification(
+        ticker=entry.Ticker,
+        current_price=item["current_price"],
+        buy_low=entry.Buy_Range_low,
+        buy_high=entry.Buy_Range_high,
+    )
+
+
 def main() -> None:
     entries = get_watchlist()
 
@@ -84,6 +116,7 @@ def main() -> None:
 
     for item in sorted_entries:
         print(_format_entry(item["entry"], item["current_price"]))
+        _process_alert(item)
 
     print("\nSummary")
     print("-------")

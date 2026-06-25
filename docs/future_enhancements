@@ -294,3 +294,22 @@ Every file should be understandable within 2 minutes, even years later.
 ## Risk Rule
 
 Any feature that can affect trading behavior must prioritize capital protection over excitement.
+
+## FE-013: Sort scanner output by distance to buy zone
+
+### Current
+Scanner output prints tickers in database order.
+
+### Proposed
+Sort scanner output by closest distance to buy range.
+
+### Reason
+Useful for manual review, but not required for alert-based workflow.
+
+The main product flow should notify only when a ticker enters range, so sorting all tickers is lower priority.
+
+### Priority
+Low
+
+### Status
+Deferred
