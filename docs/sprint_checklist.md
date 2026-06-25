@@ -179,3 +179,21 @@ Help improve trading decisions over time.
 
 Definition of Done:
 TradePilotAI can review historical trades and provide insights.
+
+
+# Sprint 2 – Live Market Scanner ✅
+
+## Objective
+Connect watchlist tickers to live/latest market prices and determine whether each ticker is below, inside, or above the planned buy range.
+
+## Completed
+- [x] Added market data dependency
+- [x] Created market data service using yfinance
+- [x] Retrieved latest available price
+- [x] Created scanner module
+- [x] Added range status logic
+- [x] Connected scanner output to app.py
+- [x] Verified all 13 watchlist tickers scan successfully
+
+## Status
+✅ COMPLETE

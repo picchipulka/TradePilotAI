@@ -59,3 +59,17 @@ AMTM, ONDS, NOK, CLSK, HLIT, HOOD, RBRK, GLW, AAOI, ANET, PLTR, RBLX, APLD
 
 ### Status
 Completed.
+
+## Milestone 2: GitHub repository created
+
+### Result
+TradePilotAI was successfully committed and pushed to GitHub.
+
+### Repository
+Private GitHub repository connected as remote origin.
+
+### Security Check
+`.env` was excluded from Git.
+
+### Status
+✅ Completed
