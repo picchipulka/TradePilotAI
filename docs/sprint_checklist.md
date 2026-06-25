@@ -197,3 +197,141 @@ Connect watchlist tickers to live/latest market prices and determine whether eac
 
 ## Status
 ✅ COMPLETE
+
+
+# Sprint 3 – Intelligent Alert Engine
+
+## Objective
+
+Transform TradePilotAI from a passive scanner into an active trading assistant by generating alerts only when a stock enters the predefined buy zone.
+
+---
+
+## Sprint 3A – Alert Trigger (Console)
+
+### Goal
+
+Generate an alert whenever a stock is detected inside the configured buy range.
+
+### Tasks
+
+* [ ] Detect when a stock status is `IN RANGE`.
+* [ ] Print a clear alert message to the console.
+* [ ] Include:
+
+  * Ticker
+  * Current Price
+  * Buy Range
+  * Stop Loss (if available)
+* [ ] Continue displaying the full scanner output for development purposes.
+
+### Deliverable
+
+Example:
+
+```
+==================================
+🚨 BUY ALERT 🚨
+
+Ticker: PLTR
+Current Price: 123.10
+Buy Zone: 122 - 127
+Status: IN RANGE
+
+==================================
+```
+
+---
+
+## Sprint 3B – Desktop Notification
+
+### Goal
+
+Display a native Windows notification whenever a buy alert is triggered.
+
+### Tasks
+
+* [ ] Create a notification service in `alerts/notifier.py`.
+* [ ] Trigger the notification only for `IN RANGE` stocks.
+* [ ] Notification should include:
+
+  * Ticker
+  * Current Price
+  * Buy Range
+
+### Deliverable
+
+Windows notification example:
+
+```
+TradePilotAI
+
+PLTR has entered your buy zone.
+
+Current Price: 123.10
+```
+
+---
+
+## Sprint 3C – Duplicate Alert Prevention
+
+### Goal
+
+Prevent TradePilotAI from repeatedly notifying while a stock remains inside the buy zone.
+
+### Tasks
+
+* [ ] Track whether an alert has already been sent.
+* [ ] Send only one alert when entering the range.
+* [ ] Reset the alert state once the stock exits the buy zone.
+* [ ] Allow a new alert only after the stock re-enters.
+
+### Expected Behavior
+
+```
+PLTR enters range
+↓
+Alert sent
+
+PLTR remains in range
+↓
+No additional alerts
+
+PLTR leaves range
+↓
+Alert state resets
+
+PLTR re-enters range
+↓
+New alert sent
+```
+
+---
+
+## Sprint 3 Success Criteria
+
+* [ ] Scanner automatically detects stocks entering the buy range.
+* [ ] Console alerts generated successfully.
+* [ ] Desktop notifications working.
+* [ ] No duplicate notifications while a stock remains inside the range.
+* [ ] Alert state resets correctly after exiting the range.
+
+---
+
+## Out of Scope
+
+The following features are intentionally deferred to future sprints:
+
+* AI thesis validation
+* AI conviction score
+* WhatsApp / SMS / Email notifications
+* Knowledge Graph
+* Historical event tracking
+* Multi-provider market data (Polygon, Alpaca)
+* Alert prioritization and ranking
+
+---
+
+## Sprint Status
+
+**Status:** ⏳ Planned
