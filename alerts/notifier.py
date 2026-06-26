@@ -1,3 +1,5 @@
+import time
+
 try:
     from winotify import Notification
 except Exception as exc:
@@ -23,7 +25,7 @@ def send_notification(
 
     toast = Notification(
         app_id="TradePilotAI",
-        title="TradePilotAI Buy Alert",
+        title=f"TradePilotAI Buy Alert - {ticker}",
         msg=(
             f"{ticker} entered buy zone\n"
             f"Current: {current_price:.2f}\n"
@@ -33,3 +35,4 @@ def send_notification(
     )
 
     toast.show()
+    time.sleep(1)
