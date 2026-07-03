@@ -3,4 +3,4 @@ python-dotenv
 requests
 pandas
 yfinance
-winotify
+anthropic

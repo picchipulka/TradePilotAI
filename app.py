@@ -3,25 +3,24 @@ from collections import Counter
 from datetime import datetime
 
 from alerts.alert_state import (
-    get_last_zone,
-    mark_below_alert_sent,
-    mark_buy_alert_sent,
-    mark_recovery_alert_sent,
-    mark_stop_alert_sent,
-    reset_below_alert,
-    reset_buy_alert,
-    reset_recovery_alert,
-    reset_stop_alert,
-    set_last_zone,
-    was_below_alert_sent,
-    was_buy_alert_sent,
-    was_recovery_alert_sent,
-    was_stop_alert_sent,
+    ABOVE_BUY_ZONE,
+    BELOW_BUY_ZONE,
+    IN_BUY_ZONE,
+    RECOVERING_TO_BUY_ZONE,
+    STOP_ZONE,
+    get_state,
+    set_state,
 )
+from ai.agent import review_thesis
 from alerts.notifier import send_notification
 from database.supabase import WatchlistEntry, get_watchlist
 from market.market_data import get_current_price
 from scanner.scanner import get_distance_to_range, get_range_status, get_zone
+
+# Alert titles significant enough in the trade thesis lifecycle to warrant an
+# independent AI review (entering the opportunity zone / entering the
+# decision zone), per docs/trade_thesis_specification.md.
+AI_REVIEW_ALERT_TITLES = {"🚨 BUY ALERT 🚨", "🚨 DECISION ALERT 🚨"}
 
 
 SCAN_INTERVAL_SECONDS = 60
@@ -121,7 +120,26 @@ def _print_console_alert(title: str, item: dict, message: str) -> None:
     print("===================================\n")
 
 
+def _format_ai_review(entry: WatchlistEntry, current_price: float | None) -> str | None:
+    review = review_thesis(entry, current_price)
+    if review is None:
+        return None
+
+    return (
+        f"\nAI Conviction : {review.ai_conviction}/10 ({review.thesis_status})\n"
+        f"AI Thesis     : {review.ai_thesis}\n"
+        f"Supporting    : {'; '.join(review.supporting_evidence) or 'None noted'}\n"
+        f"Contradicting : {'; '.join(review.contradicting_evidence) or 'None noted'}\n"
+        f"Risks         : {'; '.join(review.risks) or 'None noted'}"
+    )
+
+
 def _send_alert(title: str, item: dict, message: str) -> None:
+    if title in AI_REVIEW_ALERT_TITLES:
+        ai_summary = _format_ai_review(item["entry"], item["current_price"])
+        if ai_summary:
+            message = f"{message}\n{ai_summary}"
+
     _print_console_alert(title, item, message)
 
     entry = item["entry"]
@@ -131,72 +149,63 @@ def _send_alert(title: str, item: dict, message: str) -> None:
         current_price=item["current_price"],
         buy_low=entry.Buy_Range_low,
         buy_high=entry.Buy_Range_high,
+        title=title,
+        message=message,
     )
 
 
 def _process_alert(item: dict) -> None:
+    """Edge-triggered state machine matching docs/Trade_alert_state_diagram.png.
+
+    Zones 4 (BELOW_BUY_ZONE, falling from the buy zone) and 6 (recovering
+    up out of the stop zone) share the same scanner zone but are distinct
+    states here, since the diagram alerts differently on each: state 4 gets
+    a "heading toward stop" notification, while re-entering the buy zone
+    from state 6 (Rule 6) must NOT re-fire the buy alert.
+    """
     entry = item["entry"]
     ticker = entry.Ticker
-    current_zone = item["zone"]
-    last_zone = get_last_zone(ticker)
+    zone = item["zone"]
+    previous_state = get_state(ticker)
 
-    if current_zone == "UNKNOWN":
-        set_last_zone(ticker, current_zone)
+    if zone == "UNKNOWN":
         return
 
-    if current_zone == "IN_BUY_ZONE":
-        reset_below_alert(ticker)
-        reset_stop_alert(ticker)
-        reset_recovery_alert(ticker)
+    new_state = zone
+    alert = None
 
-        if not was_buy_alert_sent(ticker):
-            _send_alert(
-                "🚨 BUY ALERT 🚨",
-                item,
-                "Price entered buy zone.",
-            )
-            mark_buy_alert_sent(ticker)
+    if zone == IN_BUY_ZONE:
+        if previous_state == RECOVERING_TO_BUY_ZONE:
+            pass  # Rule 6: recovering into the buy zone fires no alert.
+        elif previous_state != IN_BUY_ZONE:
+            alert = ("🚨 BUY ALERT 🚨", "Price entered buy zone.")
 
-    elif current_zone == "ABOVE_BUY_ZONE":
-        reset_below_alert(ticker)
-        reset_stop_alert(ticker)
-        reset_recovery_alert(ticker)
+    elif zone == ABOVE_BUY_ZONE:
+        pass
 
-    elif current_zone == "BELOW_BUY_ZONE":
-        reset_buy_alert(ticker)
-        reset_stop_alert(ticker)
-        reset_recovery_alert(ticker)
-
-        if last_zone == "IN_BUY_ZONE" and not was_below_alert_sent(ticker):
-            _send_alert(
+    elif zone == BELOW_BUY_ZONE:
+        if previous_state == STOP_ZONE:
+            new_state = RECOVERING_TO_BUY_ZONE
+            alert = (
                 "🚨 NOTIFICATION ALERT 🚨",
-                item,
-                "Price exited below buy zone and is heading toward stop.",
-            )
-            mark_below_alert_sent(ticker)
-
-    elif current_zone == "STOP_ZONE":
-        reset_buy_alert(ticker)
-        reset_below_alert(ticker)
-
-        if last_zone == "BELOW_BUY_ZONE" and not was_stop_alert_sent(ticker):
-            _send_alert(
-                "🚨 DECISION ALERT 🚨",
-                item,
-                "Price entered stop zone.",
-            )
-            mark_stop_alert_sent(ticker)
-
-    if last_zone == "STOP_ZONE" and current_zone == "BELOW_BUY_ZONE":
-        if not was_recovery_alert_sent(ticker):
-            _send_alert(
-                "🚨 NOTIFICATION ALERT 🚨",
-                item,
                 "Price is heading back toward buy range low.",
             )
-            mark_recovery_alert_sent(ticker)
+        elif previous_state == RECOVERING_TO_BUY_ZONE:
+            new_state = RECOVERING_TO_BUY_ZONE
+        elif previous_state != BELOW_BUY_ZONE:
+            alert = (
+                "🚨 NOTIFICATION ALERT 🚨",
+                "Price exited below buy zone and is heading toward stop.",
+            )
 
-    set_last_zone(ticker, current_zone)
+    elif zone == STOP_ZONE:
+        if previous_state != STOP_ZONE:
+            alert = ("🚨 DECISION ALERT 🚨", "Price entered stop zone.")
+
+    if alert is not None:
+        _send_alert(alert[0], item, alert[1])
+
+    set_state(ticker, new_state)
 
 
 def run_scan_once() -> None:
