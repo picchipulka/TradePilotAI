@@ -11,7 +11,7 @@ from alerts.alert_state import (
     get_state,
     set_state,
 )
-from ai.agent import review_thesis
+from ai.agent import get_macro_context, review_thesis
 from alerts.notifier import send_notification
 from database.supabase import WatchlistEntry, get_watchlist
 from market.market_data import get_current_price
@@ -120,8 +120,15 @@ def _print_console_alert(title: str, item: dict, message: str) -> None:
     print("===================================\n")
 
 
-def _format_ai_review(entry: WatchlistEntry, current_price: float | None) -> str | None:
-    review = review_thesis(entry, current_price)
+def _format_ai_review(
+    entry: WatchlistEntry,
+    current_price: float | None,
+    macro_context_cache: dict,
+) -> str | None:
+    if macro_context_cache.get("context") is None:
+        macro_context_cache["context"] = get_macro_context()
+
+    review = review_thesis(entry, current_price, macro_context_cache["context"])
     if review is None:
         return None
 
@@ -134,9 +141,13 @@ def _format_ai_review(entry: WatchlistEntry, current_price: float | None) -> str
     )
 
 
-def _send_alert(title: str, item: dict, message: str) -> None:
+def _send_alert(
+    title: str, item: dict, message: str, macro_context_cache: dict
+) -> None:
     if title in AI_REVIEW_ALERT_TITLES:
-        ai_summary = _format_ai_review(item["entry"], item["current_price"])
+        ai_summary = _format_ai_review(
+            item["entry"], item["current_price"], macro_context_cache
+        )
         if ai_summary:
             message = f"{message}\n{ai_summary}"
 
@@ -154,7 +165,7 @@ def _send_alert(title: str, item: dict, message: str) -> None:
     )
 
 
-def _process_alert(item: dict) -> None:
+def _process_alert(item: dict, macro_context_cache: dict) -> None:
     """Edge-triggered state machine matching docs/Trade_alert_state_diagram.png.
 
     Zones 4 (BELOW_BUY_ZONE, falling from the buy zone) and 6 (recovering
@@ -203,7 +214,7 @@ def _process_alert(item: dict) -> None:
             alert = ("🚨 DECISION ALERT 🚨", "Price entered stop zone.")
 
     if alert is not None:
-        _send_alert(alert[0], item, alert[1])
+        _send_alert(alert[0], item, alert[1], macro_context_cache)
 
     set_state(ticker, new_state)
 
@@ -229,9 +240,14 @@ def run_scan_once() -> None:
     print(f"Found {len(entries)} watchlist entries")
     print("=" * 60 + "\n")
 
+    # Fetched lazily on the first AI-review alert this scan and reused for
+    # the rest, so macro news/indicators are only fetched once per scan
+    # instead of once per ticker (Alpha Vantage rate limit).
+    macro_context_cache: dict = {"context": None}
+
     for item in sorted_entries:
         print(_format_entry(item["entry"], item["current_price"]))
-        _process_alert(item)
+        _process_alert(item, macro_context_cache)
 
     print("\nSummary")
     print("-------")

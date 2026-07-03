@@ -108,10 +108,8 @@ class AIThesisReview:
     reasoning: str
 
 
-def build_context(entry: WatchlistEntry, current_price: float | None) -> dict:
-    stock_news = get_stock_news(entry.Ticker)
+def get_macro_context() -> dict:
     macro_news = get_macro_news()
-    spy_price = get_current_price("SPY")
 
     macro_indicators = {}
     for indicator in ECONOMIC_INDICATORS:
@@ -120,25 +118,46 @@ def build_context(entry: WatchlistEntry, current_price: float | None) -> dict:
             macro_indicators[indicator] = value
 
     return {
+        "macro_news": [asdict(item) for item in macro_news[:5]],
+        "macro_indicators": macro_indicators,
+    }
+
+
+def build_context(
+    entry: WatchlistEntry,
+    current_price: float | None,
+    macro_context: dict | None = None,
+) -> dict:
+    stock_news = get_stock_news(entry.Ticker)
+    spy_price = get_current_price("SPY")
+
+    if macro_context is None:
+        macro_context = get_macro_context()
+
+    return {
         "ticker": entry.Ticker,
         "current_price": current_price,
         "buy_zone": {"low": entry.Buy_Range_low, "high": entry.Buy_Range_high},
         "stop_loss": entry.Stop_loss,
         "stock_news": [asdict(item) for item in stock_news[:5]],
-        "macro_news": [asdict(item) for item in macro_news[:5]],
-        "macro_indicators": macro_indicators,
+        "macro_news": macro_context["macro_news"],
+        "macro_indicators": macro_context["macro_indicators"],
         "market_trend": {"spy_price": spy_price},
     }
 
 
-def review_thesis(entry: WatchlistEntry, current_price: float | None) -> AIThesisReview | None:
+def review_thesis(
+    entry: WatchlistEntry,
+    current_price: float | None,
+    macro_context: dict | None = None,
+) -> AIThesisReview | None:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         print("AI review skipped: ANTHROPIC_API_KEY not set in .env")
         return None
 
     model = os.getenv("CLAUDE_MODEL", DEFAULT_MODEL)
-    context = build_context(entry, current_price)
+    context = build_context(entry, current_price, macro_context)
 
     client = Anthropic(api_key=api_key)
 

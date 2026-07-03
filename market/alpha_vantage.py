@@ -1,4 +1,5 @@
 import os
+import time
 from dataclasses import dataclass
 
 import requests
@@ -7,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_URL = "https://www.alphavantage.co/query"
+RATE_LIMIT_DELAY_SECONDS = 2
 
 # Alpha Vantage NEWS_SENTIMENT topics relevant to macro/market-wide conditions
 # (FOMC, rate decisions, inflation prints, broad sell-offs, sector rotation).
@@ -42,6 +44,8 @@ def _get(params: dict) -> dict | None:
     except requests.RequestException as exc:
         print(f"Alpha Vantage request failed: {exc}")
         return None
+    finally:
+        time.sleep(RATE_LIMIT_DELAY_SECONDS)
 
     data = response.json()
 
