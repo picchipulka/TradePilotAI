@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
+CALLMEBOT_URL = "https://api.callmebot.com/text.php"
 
 
 def send_notification(
@@ -16,18 +16,17 @@ def send_notification(
     title: str = "TradePilotAI Alert",
     message: str = "",
 ) -> None:
-    phone = os.getenv("CALLMEBOT_PHONE")
-    api_key = os.getenv("CALLMEBOT_APIKEY")
+    telegram_user = os.getenv("CALLMEBOT_TELEGRAM_USER")
 
-    if not phone or not api_key:
+    if not telegram_user:
         print(
-            "WhatsApp notification skipped: "
-            "CALLMEBOT_PHONE and CALLMEBOT_APIKEY must be set in .env"
+            "Telegram notification skipped: "
+            "CALLMEBOT_TELEGRAM_USER must be set in .env (e.g. @yourusername)"
         )
         return
 
     if current_price is None or buy_low is None or buy_high is None:
-        print(f"WhatsApp notification skipped: missing price data for {ticker}.")
+        print(f"Telegram notification skipped: missing price data for {ticker}.")
         return
 
     text = (
@@ -40,13 +39,13 @@ def send_notification(
     try:
         response = requests.get(
             CALLMEBOT_URL,
-            params={"phone": phone, "text": text, "apikey": api_key},
+            params={"user": telegram_user, "text": text},
             timeout=10,
         )
         if response.status_code != 200:
             print(
-                f"WhatsApp notification failed for {ticker}: "
+                f"Telegram notification failed for {ticker}: "
                 f"HTTP {response.status_code}"
             )
     except requests.RequestException as exc:
-        print(f"WhatsApp notification failed for {ticker}: {exc}")
+        print(f"Telegram notification failed for {ticker}: {exc}")
